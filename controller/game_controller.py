@@ -1,8 +1,6 @@
 import tkinter as tk
 from tkinter import messagebox
 from model.game_manager import GameManager
-from model.tah import Tah
-from model.questy import Quest
 from view.game_view import GameView
 
 
@@ -14,10 +12,6 @@ class GameManagerController:
         self.game_manager = GameManager(limit_minut=cas_minuty)
         self.timer = self.game_manager.casovac
 
-        self.aktualni_quest = None
-        self.cekajici_tah = None
-        self.vybrane_pole = None
-
         self.game_view = GameView(root, self)
         self.game_view.aktualizuj_plochu()
 
@@ -26,80 +20,45 @@ class GameManagerController:
         self.odpocet_casu()
 
     def vyber_pole(self, x: int, y: int):
-        # Hráč nesmí hýbat figurkou, dokud nevyřeší probíhající quest
-        if self.cekajici_tah is not None:
-            return
+        # 1. Controller pošle stisknutou pozici do GameManageru (připomínka č. 2 splněna)
+        odpoved = self.game_manager.zkus_vybrat_pole((x, y))
 
-        obsah = self.game_manager.plocha.vrat_obsah((x, y))
+        # 2. Controller reaguje na výsledek (připomínka č. 1 splněna - logika je v Modelu)
+        akce = odpoved.get("akce")
 
-        if self.vybrane_pole is None:
-            # První kliknutí - výběr vlastní figurky
-            if obsah and self.game_manager.je_vlastni_figurka((x, y)):
-                self.vybrane_pole = (x, y)
-                self.game_view.oznac_pole(x, y)
-        else:
-            # Druhé kliknutí - přesun/útok
-            start_x, start_y = self.vybrane_pole
-            figurka = self.game_manager.plocha.vrat_obsah((start_x, start_y))
-            tah = Tah((start_x, start_y), (x, y), figurka)
-
-            if self.game_manager.revizor_tahu.simulate_Move(tah):
-                cilova_fig = self.game_manager.plocha.vrat_obsah((x, y))
-
-                # Pokud na poli něco je, figurka se neposune a zahájí se quest
-                if cilova_fig is not None:
-                    self.cekajici_tah = tah
-                    self.aktualni_quest = Quest()
-                    self.game_view.ukaz_quest(self.aktualni_quest.zadani)
-                else:
-                    self.proved_tah(tah)
-
-            # Zrušení žlutého výběru
-            self.vybrane_pole = None
-            if not self.cekajici_tah:
-                self.game_view.aktualizuj_plochu()
+        if akce == "oznac":
+            self.game_view.oznac_pole(*odpoved["souradnice"])
+        elif akce == "quest":
+            self.game_view.ukaz_quest(odpoved["zadani"])
+        elif akce in ["konec_vyberu", "tah_proveden"]:
+            self.game_view.aktualizuj_plochu()
+            self.zkontroluj_konec_hry()
+            self.aktualizuj_ui()
 
     def zkontroluj_quest(self, odpoved: str):
-        if self.aktualni_quest and self.aktualni_quest.over_odpoved(odpoved):
-            # Správná odpověď - quest zmizí a tah se dokončí
-            self.game_view.skryj_quest()
-            self.proved_tah(self.cekajici_tah)
-            self.cekajici_tah = None
-            self.aktualni_quest = None
-            self.game_view.aktualizuj_plochu()
-        else:
-            # Špatná odpověď - vyskakovací okno je pryč.
-            # Panel zmizí, útok se ruší, ale hráč NEZTRÁCÍ tah a může hrát jinou figurkou.
-            self.game_view.skryj_quest()
-            self.cekajici_tah = None
-            self.aktualni_quest = None
-            self.vybrane_pole = None
+        # Zeptáme se modelu, zda je odpověď správná, on zařídí zbytek
+        uspech = self.game_manager.over_odpoved_questu(odpoved)
 
-            # ---  Přepnutí tahu na protihráče ---
-            self.game_manager.aktivni_hrac *= -1
-            self.aktualizuj_ui()
-            self.game_view.aktualizuj_plochu()
+        self.game_view.skryj_quest()
+        self.game_view.aktualizuj_plochu()
 
-    def proved_tah(self, tah):
-        # Fyzické posunutí figurky
-        self.game_manager.plocha.posun_figurky(tah)
-        # Změna aktivního hráče
-        self.game_manager.aktivni_hrac *= -1
+        if uspech:
+            self.zkontroluj_konec_hry()
+
         self.aktualizuj_ui()
 
-        # Otestování konce hry (Šach, Mat, Pat)
-        aktivni = self.game_manager.aktivni_hrac
-        revizor = self.game_manager.revizor_tahu
+    def zkontroluj_konec_hry(self):
+        """Zkontroluje přes model stav hry a případně vyvolá okna."""
+        stav = self.game_manager.zkontroluj_stav_hry()
 
-        # Pro zobrazení konce hry necháváme messagebox, jelikož hra reálně končí
-        if revizor.check_Mat(aktivni):
+        if stav == "mat":
             self.odpocet_bezi = False
-            vitez = "Bílý" if aktivni == -1 else "Černý"
+            vitez = "Bílý" if self.game_manager.aktivni_hrac == -1 else "Černý"
             messagebox.showinfo("Konec hry", f"Šach mat! Vyhrál {vitez}.")
-        elif revizor.check_Pat(aktivni):
+        elif stav == "pat":
             self.odpocet_bezi = False
             messagebox.showinfo("Konec hry", "Remíza! (Pat)")
-        elif revizor.je_sach(aktivni):
+        elif stav == "sach":
             messagebox.showwarning("Šach", "Tvůj král je v ohrožení (Šach)!")
 
     def odpocet_casu(self):
