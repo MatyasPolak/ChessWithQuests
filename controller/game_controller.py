@@ -2,7 +2,7 @@ import tkinter as tk
 from tkinter import messagebox
 from model.game_manager import GameManager
 from model.tah import Tah
-from model.questy import MathQuest
+from model.questy import Quest
 from view.game_view import GameView
 
 
@@ -49,7 +49,7 @@ class GameManagerController:
                 # Pokud na poli něco je, figurka se neposune a zahájí se quest
                 if cilova_fig is not None:
                     self.cekajici_tah = tah
-                    self.aktualni_quest = MathQuest()
+                    self.aktualni_quest = Quest()
                     self.game_view.ukaz_quest(self.aktualni_quest.zadani)
                 else:
                     self.proved_tah(tah)
@@ -74,6 +74,10 @@ class GameManagerController:
             self.cekajici_tah = None
             self.aktualni_quest = None
             self.vybrane_pole = None
+
+            # ---  Přepnutí tahu na protihráče ---
+            self.game_manager.aktivni_hrac *= -1
+            self.aktualizuj_ui()
             self.game_view.aktualizuj_plochu()
 
     def proved_tah(self, tah):

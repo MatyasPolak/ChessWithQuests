@@ -11,7 +11,7 @@ class QuestView(tk.Frame):
         self.lbl_titulek.pack(pady=5)
 
         # Otázka
-        self.lbl_otazka = tk.Label(self, text="Čekání na útok...", bg="#111111", fg="gray", font=("Arial", 14))
+        self.lbl_otazka = tk.Label(self, text="Čekání na útok...", bg="#111111", fg="gray", font=("Arial", 14), wraplength=200)
         self.lbl_otazka.pack(pady=5)
 
         # Vstupní pole (ve výchozím stavu vypnuté)
